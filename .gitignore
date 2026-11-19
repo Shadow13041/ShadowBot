@@ -1,0 +1,12 @@
+
+# Private Daten und Zugangsdaten
+.env
+.env.*
+!.env.example
+node_modules/
+auth_info_baileys/
+*.session
+*.pem
+*.key
+credentials.json
+token.json

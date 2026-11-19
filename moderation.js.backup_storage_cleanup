@@ -1,0 +1,266 @@
+import fs from 'node:fs/promises';
+import path from 'node:path';
+
+const DATA_DIR = path.join(process.cwd(), 'data');
+const ADMINS_FILE = path.join(DATA_DIR, 'admins.json');
+const MODERATION_FILE = path.join(DATA_DIR, 'moderation.json');
+
+export const MODERATION_PERMISSIONS = [
+  'kick',
+  'ban',
+  'mute',
+  'block'
+];
+
+const DEFAULT_ADMINS = {
+  admins: {},
+  defaultPermissions: [...MODERATION_PERMISSIONS]
+};
+
+const DEFAULT_MODERATION = {
+  global: {
+    bans: [],
+    mutes: []
+  },
+  groups: {}
+};
+
+async function readJson(file, fallback) {
+  try {
+    return JSON.parse(await fs.readFile(file, 'utf8'));
+  } catch {
+    return structuredClone(fallback);
+  }
+}
+
+async function writeJson(file, data) {
+  await fs.mkdir(DATA_DIR, { recursive: true });
+  const temp = `${file}.tmp`;
+  await fs.writeFile(temp, JSON.stringify(data, null, 2), 'utf8');
+  await fs.rename(temp, file);
+}
+
+export function normalizeJid(jid) {
+  if (typeof jid !== 'string' || !jid.trim()) return null;
+  return jid.trim().replace(/:\d+@/, '@');
+}
+
+export function normalizeNumber(value) {
+  const digits = String(value || '').replace(/\D/g, '');
+  return digits ? `${digits}@s.whatsapp.net` : null;
+}
+
+export async function getAdmins() {
+  const data = await readJson(ADMINS_FILE, DEFAULT_ADMINS);
+  data.admins ||= {};
+  data.defaultPermissions ||= [...MODERATION_PERMISSIONS];
+  return data;
+}
+
+export async function saveAdmins(data) {
+  await writeJson(ADMINS_FILE, data);
+}
+
+export async function getModeration() {
+  const data = await readJson(MODERATION_FILE, DEFAULT_MODERATION);
+  data.global ||= { bans: [], mutes: [] };
+  data.global.bans ||= [];
+  data.global.mutes ||= [];
+  data.groups ||= {};
+  return data;
+}
+
+export async function saveModeration(data) {
+  await writeJson(MODERATION_FILE, data);
+}
+
+export async function getRole(aliases) {
+  const ids = (aliases || []).map(normalizeJid).filter(Boolean);
+
+  const configuredOwner = normalizeJid(process.env.OWNER_JID);
+  const configuredAdmins = (process.env.ADMIN_JID || '')
+    .split(',')
+    .map(normalizeJid)
+    .filter(Boolean);
+
+  const owner = configuredOwner || configuredAdmins.shift() || null;
+
+  if (owner && ids.includes(owner)) {
+    return {
+      role: 'owner',
+      permissions: [...MODERATION_PERMISSIONS]
+    };
+  }
+
+  const data = await getAdmins();
+
+  for (const id of ids) {
+    const admin = data.admins[id];
+
+    if (admin) {
+      return {
+        role: 'admin',
+        permissions: Array.isArray(admin.permissions)
+          ? admin.permissions
+          : [...data.defaultPermissions]
+      };
+    }
+
+    if (configuredAdmins.includes(id)) {
+      return {
+        role: 'admin',
+        permissions: [...data.defaultPermissions]
+      };
+    }
+  }
+
+  return { role: 'user', permissions: [] };
+}
+
+export async function hasPermission(aliases, permission) {
+  const role = await getRole(aliases);
+  return role.role === 'owner' ||
+    (role.role === 'admin' && role.permissions.includes(permission));
+}
+
+export async function addAdmin(jid) {
+  const id = normalizeJid(jid);
+  if (!id) throw new Error('Ungültige JID.');
+
+  const owner = normalizeJid(process.env.OWNER_JID) ||
+    normalizeJid(process.env.ADMIN_JID);
+
+  if (id === owner) throw new Error('Der Owner kann nicht als Admin eingetragen werden.');
+
+  const data = await getAdmins();
+  data.admins[id] = {
+    permissions: [...data.defaultPermissions],
+    addedAt: Date.now()
+  };
+  await saveAdmins(data);
+}
+
+export async function removeAdmin(jid) {
+  const id = normalizeJid(jid);
+  const owner = normalizeJid(process.env.OWNER_JID) ||
+    normalizeJid(process.env.ADMIN_JID);
+
+  if (!id || id === owner) throw new Error('Der Owner kann nicht entfernt werden.');
+
+  const data = await getAdmins();
+  delete data.admins[id];
+  await saveAdmins(data);
+}
+
+export async function setAdminPermission(jid, permission, enabled) {
+  const id = normalizeJid(jid);
+  if (!id || !MODERATION_PERMISSIONS.includes(permission)) {
+    throw new Error('Ungültige Nummer oder Berechtigung.');
+  }
+
+  const owner = normalizeJid(process.env.OWNER_JID) ||
+    normalizeJid(process.env.ADMIN_JID);
+
+  if (id === owner) throw new Error('Owner-Rechte können nicht geändert werden.');
+
+  const data = await getAdmins();
+  data.admins[id] ||= {
+    permissions: [...data.defaultPermissions],
+    addedAt: Date.now()
+  };
+
+  const permissions = new Set(data.admins[id].permissions);
+  if (enabled) permissions.add(permission);
+  else permissions.delete(permission);
+
+  data.admins[id].permissions = [...permissions];
+  await saveAdmins(data);
+}
+
+export async function setDefaultPermission(permission, enabled) {
+  if (!MODERATION_PERMISSIONS.includes(permission)) {
+    throw new Error('Unbekannte Berechtigung.');
+  }
+
+  const data = await getAdmins();
+  const permissions = new Set(data.defaultPermissions);
+
+  if (enabled) permissions.add(permission);
+  else permissions.delete(permission);
+
+  data.defaultPermissions = [...permissions];
+
+  for (const admin of Object.values(data.admins)) {
+    const current = new Set(admin.permissions || []);
+    if (enabled) current.add(permission);
+    else current.delete(permission);
+    admin.permissions = [...current];
+  }
+
+  await saveAdmins(data);
+}
+
+export async function setGroupState(groupJid, targetJid, type, enabled, actor) {
+  const data = await getModeration();
+  const group = data.groups[groupJid] ||= { bans: [], mutes: [] };
+  group[type] ||= [];
+
+  const target = normalizeJid(targetJid);
+  if (!target || !['bans', 'mutes'].includes(type)) {
+    throw new Error('Ungültiges Ziel oder ungültiger Status.');
+  }
+
+  group[type] = group[type].filter(entry => entry.jid !== target);
+
+  if (enabled) {
+    group[type].push({
+      jid: target,
+      at: Date.now(),
+      actor: normalizeJid(actor)
+    });
+  }
+
+  await saveModeration(data);
+}
+
+export async function setGlobalState(targetJid, type, enabled, actor) {
+  const data = await getModeration();
+  const target = normalizeJid(targetJid);
+
+  if (!target || !['bans', 'mutes'].includes(type)) {
+    throw new Error('Ungültiges Ziel oder ungültiger Status.');
+  }
+
+  data.global[type] = data.global[type].filter(entry => entry.jid !== target);
+
+  if (enabled) {
+    data.global[type].push({
+      jid: target,
+      at: Date.now(),
+      actor: normalizeJid(actor)
+    });
+  }
+
+  await saveModeration(data);
+}
+
+export async function isRestricted(groupJid, aliases, type) {
+  const ids = (aliases || []).map(normalizeJid).filter(Boolean);
+  const data = await getModeration();
+
+  const globalEntries = data.global?.[type] || [];
+  const groupEntries = data.groups?.[groupJid]?.[type] || [];
+
+  return [...globalEntries, ...groupEntries]
+    .some(entry => ids.includes(normalizeJid(entry.jid)));
+}
+
+export async function getGlobalTargets(type) {
+  const data = await getModeration();
+  return (data.global?.[type] || []).map(entry => entry.jid);
+}
+
+export async function getGroupTargets(groupJid, type) {
+  const data = await getModeration();
+  return (data.groups?.[groupJid]?.[type] || []).map(entry => entry.jid);
+}

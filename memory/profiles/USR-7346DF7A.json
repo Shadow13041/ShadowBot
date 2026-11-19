@@ -1,0 +1,34 @@
+{
+  "id": "USR-7346DF7A",
+  "consent": true,
+  "name": null,
+  "memory": "",
+  "images": [],
+  "createdAt": 1793639995985,
+  "updatedAt": 1793953941048,
+  "personality": "",
+  "clearPendingAt": 0,
+  "notes": [],
+  "history": [
+    {
+      "at": 1793865145911,
+      "text": "Du: finniboy hat nh kleinen\nShadow Bot: Alles klar. Kann ich dir bei einem bestimmten Thema oder einer Frage weiterhelfen?"
+    },
+    {
+      "at": 1793865185012,
+      "text": "Du: was machen sachen\nShadow Bot: Alles bestens bei mir! Ich bin einsatzbereit. Wie geht's dir und was gibt es Neues?"
+    },
+    {
+      "at": 1793878901672,
+      "text": "Du: fritz der golem\nShadow Bot: Meinst du damit eine bestimmte Figur, ein Spiel oder eine Geschichte? Gib mir gerne etwas mehr Kontext, damit ich dir weiterhelfen kann!"
+    },
+    {
+      "at": 1793916672777,
+      "text": "Du: mach nh guten text den ich einem seb schickn kann (er is nh idiot)\nShadow Bot: Hier sind ein paar Optionen, je nachdem, wie direkt oder ironisch du sein möchtest:\n\n**Option 1 (Direkt & klar):**\n„Hi Seb, ganz ehrlich: Dein Verhalten nervt gerade einfach nur. Spar dir das bitte.“\n\n**Option 2 (Sarkastisch):**\n„Hey Seb, gibst du dir eigentlich heute besonders viel Mühe oder kommt das ganz von alleine?“\n\n**Option 3 (Kurz & trocken):**\n„Seb, du gehst mir gerade gewaltig auf die Nerven. Lass stecken.“\n\nPasst eine davon für deine Situation?"
+    },
+    {
+      "at": 1793953941048,
+      "text": "Du: erststelle nh bild von einem Lamborghini\nShadow Bot: Leider kann ich keine Bilder direkt generieren oder anzeigen, da ich ein reiner Text-Assistent bin. Du kannst aber Tools wie DALL-E, Midjourney oder Bing Image Creator nutzen, um ein Bild eines Lamborghinis zu erstellen!"
+    }
+  ]
+}

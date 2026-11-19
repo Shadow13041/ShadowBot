@@ -1,0 +1,18 @@
+{
+  "admins": {
+    "4915908626360@s.whatsapp.net": {
+      "permissions": [
+        "kick",
+        "mute",
+        "block"
+      ],
+      "addedAt": 1793947894761
+    }
+  },
+  "defaultPermissions": [
+    "kick",
+    "ban",
+    "mute",
+    "block"
+  ]
+}

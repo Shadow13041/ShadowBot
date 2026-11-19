@@ -1,0 +1,46 @@
+{
+  "id": "USR-9EEE5766",
+  "consent": true,
+  "name": null,
+  "memory": "Wohnort: Dresden\nInteresse: Softwareentwicklung (langfristig)\nName: Nico",
+  "images": [],
+  "createdAt": 1793639397636,
+  "updatedAt": 1794049137208,
+  "personality": "",
+  "clearPendingAt": 0,
+  "notes": [],
+  "history": [
+    {
+      "at": 1793817351480,
+      "text": "Du: Hallo\nShadow Bot: Hallo Nico! Wie kann ich dir heute helfen?"
+    },
+    {
+      "at": 1793863468029,
+      "text": "Du: Hallo\nShadow Bot: Hallo Nico! Wie kann ich dir heute helfen?"
+    },
+    {
+      "at": 1793863735605,
+      "text": "Du: Test\nShadow Bot: Hallo Nico! Test erfolgreich. Wie kann ich dir helfen?"
+    },
+    {
+      "at": 1793863846837,
+      "text": "Du: was geeeeeht?\nShadow Bot: Hey Nico! Alles bestens bei mir. Wie läuft's bei dir?"
+    },
+    {
+      "at": 1793863931627,
+      "text": "Du: Moin Moin\nShadow Bot: Moin Moin, Nico! Wie kann ich dir heute helfen?"
+    },
+    {
+      "at": 1793864908147,
+      "text": "Du: hallo\nShadow Bot: Hallo Nico! Wie kann ich dir heute helfen?"
+    },
+    {
+      "at": 1793867102904,
+      "text": "Du: Inhalt der Sprachnachricht:\nWas geht?\nShadow Bot: Hey Nico! Alles bestens bei mir. Wie kann ich dir helfen?"
+    },
+    {
+      "at": 1794049137208,
+      "text": "Du: test\nShadow Bot: Hallo Nico! Test erfolgreich. Wie kann ich dir helfen?"
+    }
+  ]
+}

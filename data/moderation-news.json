@@ -1,0 +1,46 @@
+{
+  "events": [
+    {
+      "id": "97244d6d-3614-4d09-b5e2-3371078c93e6",
+      "group": "120363430727611104@g.us",
+      "type": "mute",
+      "target": "4915908626360@s.whatsapp.net",
+      "actor": "136847858647127@lid",
+      "details": "",
+      "timestamp": 1793909338225
+    },
+    {
+      "id": "bc9d1c68-fcc8-435a-bdf0-e7ea9657bfca",
+      "group": "120363430727611104@g.us",
+      "type": "unmute",
+      "target": "4915908626360@s.whatsapp.net",
+      "actor": "136847858647127@lid",
+      "details": "",
+      "timestamp": 1793909361709
+    },
+    {
+      "id": "4b4d2708-ccf4-4dba-bae8-813f8a0b1771",
+      "group": "120363430727611104@g.us",
+      "type": "mute",
+      "target": "4915908626360@s.whatsapp.net",
+      "actor": "136847858647127@lid",
+      "details": "",
+      "timestamp": 1793947543765
+    },
+    {
+      "id": "9f070867-312d-43df-a45f-5a6f9f50e707",
+      "group": "120363430727611104@g.us",
+      "type": "unmute",
+      "target": "4915908626360@s.whatsapp.net",
+      "actor": "136847858647127@lid",
+      "details": "",
+      "timestamp": 1793947551389
+    }
+  ],
+  "readCursors": {
+    "4917650857452@s.whatsapp.net": {
+      "timestamp": 1793947551389,
+      "id": "9f070867-312d-43df-a45f-5a6f9f50e707"
+    }
+  }
+}
