@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node --check index.js && node --check moderation.js"
   },
   "keywords": [],
   "author": "",
@@ -13,6 +13,7 @@
   "dependencies": {
     "@google/genai": "^2.32.0",
     "@whiskeysockets/baileys": "^7.0.0-rc14",
-    "dotenv": "^18.0.9"
+    "dotenv": "^18.0.9",
+    "pino": "^9.14.0"
   }
 }

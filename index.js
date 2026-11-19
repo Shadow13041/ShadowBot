@@ -1902,7 +1902,7 @@ async function handleBotCommand(command, args, chatId, message, profile, profile
     return send(
       'Shadow Bot – Datenschutz und Zustimmung\n\n' +
       'Wenn du /ai oder andere KI-Funktionen verwendest, werden die dafür nötigen Texte und gegebenenfalls Bilder oder Audiodaten an Google Gemini übermittelt. Bei /research wird die Suchanfrage an Purili gesendet.\n\n' +
-      'Mit /accept erlaubst du zusätzlich die lokale Speicherung deines persönlichen Profils, deiner KI-Erinnerungen und von bis zu drei Bildern. Gespeicherte Bilder werden nach spätestens 30 Tagen gelöscht. Notizen und Chatverlauf werden lokal in deinem Shadow-Bot-Datenordner gespeichert und können von dir mit den entsprechenden Befehlen verwaltet werden.\n\n' +
+      'Mit /accept erlaubst du zusätzlich die lokale Speicherung deiner persönlichen Einstellungen, KI-Erinnerungen, Notizen, deines Chatverlaufs und von bis zu drei Bildern. Gespeicherte Bilder werden nach spätestens 30 Tagen gelöscht. Notizen und Verlauf kannst du mit den entsprechenden Befehlen verwalten.\n\n' +
       'Mit /decline werden gespeicherte KI-Erinnerungen, Name und Bilder gelöscht. /ai bleibt nutzbar, aber ohne dauerhafte KI-Erinnerungen oder Bildspeicherung. Für die eigentliche KI-Verarbeitung werden eingegebene Inhalte trotzdem an Google Gemini übertragen.\n\n' +
       'Du kannst /accept oder /decline jederzeit verwenden.'
     );
@@ -1926,6 +1926,9 @@ async function handleBotCommand(command, args, chatId, message, profile, profile
     const edit = args.match(/^edit\s+(\d+)\s+([\s\S]+)$/i);
     const remove = args.match(/^delete\s+(\d+)$/i);
     if (edit) {
+      if (profile.consent !== true) {
+        return send('Zum Erstellen oder Ändern von Notizen benötigst du zuerst /accept.');
+      }
       const note = profile.notes.find(n => n.id === Number(edit[1]));
       if (!note) return send('Diese Notiz-ID existiert nicht.');
       if (edit[2].length > 1000) return send('Eine Notiz darf höchstens 1000 Zeichen lang sein.');
@@ -1940,6 +1943,9 @@ async function handleBotCommand(command, args, chatId, message, profile, profile
       if (profile.notes.length === before) return send('Diese Notiz-ID existiert nicht.');
       await saveProfile(profileFile, profile);
       return send(`Notiz ${remove[1]} wurde gelöscht.`);
+    }
+    if (profile.consent !== true) {
+      return send('Zum Erstellen von Notizen benötigst du zuerst /accept.');
     }
     if (args.length > 1000) return send('Eine Notiz darf höchstens 1000 Zeichen lang sein.');
     if ((profile.notes || []).length >= 100) return send('Du hast bereits 100 Notizen. Lösche zuerst eine alte Notiz.');
@@ -2117,6 +2123,10 @@ async function handleBotCommand(command, args, chatId, message, profile, profile
       );
     }
 
+    if (profile.consent !== true) {
+      return send('Zum Speichern einer persönlichen Antwortvorgabe benötigst du zuerst /accept.');
+    }
+
     if (args.length > 500) {
       return send('Die Antwortvorgabe darf höchstens 500 Zeichen lang sein.');
     }
@@ -2236,7 +2246,7 @@ async function handleBotCommand(command, args, chatId, message, profile, profile
 async function sendConsentPrompt(chatId, message) {
   const text =
     'Ich bin Shadow Bot. Für KI-Antworten werden die dafür nötigen Texte und gegebenenfalls Bilder oder Audiodaten an Google Gemini übermittelt. Bei /research wird die Suchanfrage an Purili gesendet.\n\n' +
-    'Mit /accept erlaubst du zusätzlich die lokale Speicherung deines persönlichen Profils, deiner KI-Erinnerungen und von bis zu drei Bildern. Bilder werden nach spätestens 30 Tagen gelöscht.\n\n' +
+    'Mit /accept erlaubst du zusätzlich die lokale Speicherung deiner persönlichen Einstellungen, KI-Erinnerungen, Notizen, deines Chatverlaufs und von bis zu drei Bildern. Bilder werden nach spätestens 30 Tagen gelöscht.\n\n' +
     'Mit /decline werden gespeicherte KI-Erinnerungen, Name und Bilder gelöscht. /ai bleibt nutzbar, aber ohne dauerhafte KI-Erinnerungen oder Bildspeicherung. Für die KI-Verarbeitung werden eingegebene Inhalte trotzdem an Google Gemini übertragen.\n\n' +
     'Antworte mit /accept oder /decline. Weitere Informationen: /cookies';
 
@@ -2638,7 +2648,7 @@ async function handleMessage(message) {
     await sendBotMessage(
       chatId,
       {
-        text: 'Deine Zustimmung wurde gespeichert. Deine Erinnerungen gelten ab jetzt chatübergreifend.'
+        text: 'Deine Zustimmung wurde gespeichert. Deine persönlichen Einstellungen, Notizen und Erinnerungen können jetzt lokal gespeichert werden.'
       },
       { quoted: message }
     );
@@ -2651,7 +2661,9 @@ async function handleMessage(message) {
     profile.consent = false;
     profile.memory = '';
     profile.name = null;
+    profile.personality = '';
     profile.images = [];
+    profile.notes = [];
     profile.history = [];
 
     await saveProfile(profileFile, profile);
@@ -2664,7 +2676,7 @@ async function handleMessage(message) {
     await sendBotMessage(
       chatId,
       {
-        text: 'Alles klar. Deine gespeicherten Erinnerungen und Bilder wurden gelöscht. /ai funktioniert weiterhin ohne Speicherung.'
+        text: 'Alles klar. Deine gespeicherten persönlichen Einstellungen, Erinnerungen, Notizen, Verlaufseinträge und Bilder wurden gelöscht. /ai funktioniert weiterhin ohne dauerhafte Speicherung.'
       },
       { quoted: message }
     );
