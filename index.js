@@ -159,6 +159,7 @@ const logger = pino({ level: 'silent' });
 
 let sock;
 let pairingRequested = false;
+let botStartedAt = Math.floor(Date.now() / 1000);
 
 const botStats = {
   requests: 0,
@@ -2941,6 +2942,8 @@ async function handleMessage(message) {
 }
 
 async function startBot() {
+  botStartedAt = Math.floor(Date.now() / 1000);
+
   const { state, saveCreds } =
     await useMultiFileAuthState(AUTH_DIR);
 
@@ -3095,6 +3098,16 @@ async function startBot() {
     if (type !== 'notify') return;
 
     for (const message of messages) {
+      const rawTimestamp = message.messageTimestamp;
+      const messageTimestamp = typeof rawTimestamp?.toNumber === 'function'
+        ? rawTimestamp.toNumber()
+        : Number(rawTimestamp);
+
+      if (!Number.isFinite(messageTimestamp) || messageTimestamp <= botStartedAt) {
+        console.log('Alte Nachricht ignoriert.');
+        continue;
+      }
+
       handleMessage(message).catch(error => {
         console.error('Nachrichtenfehler:', error);
       });
