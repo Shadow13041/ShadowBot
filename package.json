@@ -4,7 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "node --test && node --check index.js && node --check moderation.js"
+    "test": "node --test && node --check index.js && node --check moderation.js",
+    "postinstall": "node scripts/patch-baileys.js"
   },
   "keywords": [],
   "author": "",
