@@ -153,6 +153,8 @@ const GROUP_SETTINGS_FILE = path.join(ROOT, 'data', 'group-settings.json');
 
 const MAX_MEMORY_BYTES = 25 * 1024;
 const MAX_IMAGES = 3;
+const imageCleanupTimes = new Map();
+const IMAGE_CLEANUP_INTERVAL = 6 * 60 * 60 * 1000;
 const IMAGE_MAX_AGE = 30 * 24 * 60 * 60 * 1000;
 
 const logger = pino({ level: 'silent' });
@@ -245,6 +247,8 @@ function normalizeJid(jid) {
 }
 
 // Ermittelt Telefonnummer und LID derselben Person.
+const lidMappingCache = new Map();
+
 async function getSenderAliases(message) {
   const key = message.key || {};
   const isGroup = key.remoteJid?.endsWith('@g.us');
@@ -267,14 +271,26 @@ async function getSenderAliases(message) {
     !alternate &&
     sock?.signalRepository?.lidMapping
   ) {
-    try {
-      const pn = await sock.signalRepository.lidMapping.getPNForLID(primary);
+    const cachedPn = lidMappingCache.get(primary);
 
-      if (pn) {
-        aliases.push(normalizeJid(pn));
+    if (cachedPn) {
+      aliases.push(cachedPn);
+    } else {
+      try {
+        const pn = await sock.signalRepository.lidMapping.getPNForLID(primary);
+        const normalizedPn = normalizeJid(pn);
+
+        if (normalizedPn) {
+          if (lidMappingCache.size >= 5000) {
+            lidMappingCache.delete(lidMappingCache.keys().next().value);
+          }
+
+          lidMappingCache.set(primary, normalizedPn);
+          aliases.push(normalizedPn);
+        }
+      } catch (error) {
+        console.error('LID-Auflösung:', error.message);
       }
-    } catch (error) {
-      console.error('LID-Auflösung:', error.message);
     }
   }
 
@@ -282,9 +298,15 @@ async function getSenderAliases(message) {
 }
 
 // Alle bekannten IDs werden demselben Benutzer zugeordnet.
-async function getOrCreateUser(aliases) {
-  const users = await readJson(USERS_FILE, {});
+let usersCachePromise = null;
+let usersWriteQueue = Promise.resolve();
 
+async function getOrCreateUser(aliases) {
+  if (!usersCachePromise) {
+    usersCachePromise = readJson(USERS_FILE, {});
+  }
+
+  const users = await usersCachePromise;
   const matchingIds = [
     ...new Set(aliases.map(alias => users[alias]).filter(Boolean))
   ];
@@ -294,8 +316,9 @@ async function getOrCreateUser(aliases) {
 
   const profileFile = path.join(PROFILES_DIR, `${userId}.json`);
   let profile = await readJson(profileFile, null);
+  let profileChanged = false;
+  let usersChanged = false;
 
-  // Bereits zugeordnete Profile zusammenführen.
   for (const oldId of matchingIds.slice(1)) {
     const oldFile = path.join(PROFILES_DIR, `${oldId}.json`);
     const oldProfile = await readJson(oldFile, null);
@@ -305,34 +328,39 @@ async function getOrCreateUser(aliases) {
     if (!profile) {
       profile = oldProfile;
     } else {
-      if (oldProfile.consent === true) {
-        profile.consent = true;
-      }
-
-      if (!profile.name && oldProfile.name) {
-        profile.name = oldProfile.name;
-      }
-
-      if (!profile.memory && oldProfile.memory) {
-        profile.memory = oldProfile.memory;
-      }
+      if (oldProfile.consent === true) profile.consent = true;
+      if (!profile.name && oldProfile.name) profile.name = oldProfile.name;
+      if (!profile.memory && oldProfile.memory) profile.memory = oldProfile.memory;
 
       profile.images = [
         ...(profile.images || []),
         ...(oldProfile.images || [])
       ].slice(-MAX_IMAGES);
-      profile.notes = [...(profile.notes || []), ...(oldProfile.notes || [])].slice(0, 100);
-      profile.history = [...(profile.history || []), ...(oldProfile.history || [])].slice(-100);
+      profile.notes = [
+        ...(profile.notes || []),
+        ...(oldProfile.notes || [])
+      ].slice(0, 100);
+      profile.history = [
+        ...(profile.history || []),
+        ...(oldProfile.history || [])
+      ].slice(-100);
     }
 
+    profileChanged = true;
     await fs.rm(oldFile, { force: true });
   }
 
   for (const alias of aliases) {
-    users[alias] = userId;
+    if (users[alias] !== userId) {
+      users[alias] = userId;
+      usersChanged = true;
+    }
   }
 
-  await writeJson(USERS_FILE, users);
+  if (usersChanged) {
+    usersWriteQueue = usersWriteQueue.then(() => writeJson(USERS_FILE, users));
+    await usersWriteQueue;
+  }
 
   if (!profile) {
     profile = {
@@ -348,17 +376,18 @@ async function getOrCreateUser(aliases) {
       createdAt: Date.now(),
       updatedAt: Date.now()
     };
-
-    await writeJson(profileFile, profile);
+    profileChanged = true;
   } else {
-    profile.id = userId;
-    profile.images ||= [];
-    profile.notes ||= [];
-    profile.history ||= [];
-    profile.memory ||= '';
-    profile.personality ||= '';
-    profile.clearPendingAt ||= 0;
+    if (profile.id !== userId) { profile.id = userId; profileChanged = true; }
+    if (!profile.images) { profile.images = []; profileChanged = true; }
+    if (!profile.notes) { profile.notes = []; profileChanged = true; }
+    if (!profile.history) { profile.history = []; profileChanged = true; }
+    if (!profile.memory) { profile.memory = ''; profileChanged = true; }
+    if (!profile.personality) { profile.personality = ''; profileChanged = true; }
+    if (!profile.clearPendingAt) { profile.clearPendingAt = 0; profileChanged = true; }
+  }
 
+  if (profileChanged) {
     await writeJson(profileFile, profile);
   }
 
@@ -774,6 +803,11 @@ async function saveProfile(profileFile, profile) {
 
 async function cleanOldImages(userId, profile, profileFile) {
   const now = Date.now();
+
+  if (now - (imageCleanupTimes.get(userId) || 0) < IMAGE_CLEANUP_INTERVAL) {
+    return;
+  }
+
   const userImageDir = path.join(IMAGES_DIR, userId);
 
   await fs.mkdir(userImageDir, { recursive: true });
@@ -803,6 +837,7 @@ async function cleanOldImages(userId, profile, profileFile) {
 
   profile.images = validImages;
   await saveProfile(profileFile, profile);
+  imageCleanupTimes.set(userId, now);
 }
 
 async function storeImage(userId, profile, profileFile, buffer) {
@@ -1211,54 +1246,76 @@ async function getResearchContext(query) {
 
 const MODERATION_RUNTIME_FILE = path.join(ROOT, 'data', 'group-moderation-runtime.json');
 
+let moderationRuntimeCache = null;
+let moderationRuntimeLoadPromise = null;
+let moderationRuntimeWriteQueue = Promise.resolve();
+
 async function readModerationRuntime() {
-  let raw;
+  if (moderationRuntimeCache) return moderationRuntimeCache;
+  if (moderationRuntimeLoadPromise) return moderationRuntimeLoadPromise;
+
+  moderationRuntimeLoadPromise = (async () => {
+    let raw;
+
+    try {
+      raw = await fs.readFile(MODERATION_RUNTIME_FILE, 'utf8');
+    } catch (error) {
+      if (error.code === 'ENOENT') {
+        moderationRuntimeCache = { groups: {}, global: {} };
+        return moderationRuntimeCache;
+      }
+      throw error;
+    }
+
+    const data = JSON.parse(raw);
+
+    if (
+      !data ||
+      typeof data !== 'object' ||
+      Array.isArray(data) ||
+      !data.groups ||
+      typeof data.groups !== 'object' ||
+      Array.isArray(data.groups) ||
+      !data.global ||
+      typeof data.global !== 'object' ||
+      Array.isArray(data.global)
+    ) {
+      throw new Error('Moderationsdatei hat eine ungültige Struktur.');
+    }
+
+    moderationRuntimeCache = data;
+    return moderationRuntimeCache;
+  })();
 
   try {
-    raw = await fs.readFile(MODERATION_RUNTIME_FILE, 'utf8');
+    return await moderationRuntimeLoadPromise;
   } catch (error) {
-    if (error.code === 'ENOENT') {
-      return { groups: {}, global: {} };
-    }
+    moderationRuntimeLoadPromise = null;
     throw error;
   }
-
-  const data = JSON.parse(raw);
-
-  if (
-    !data ||
-    typeof data !== 'object' ||
-    Array.isArray(data) ||
-    !data.groups ||
-    typeof data.groups !== 'object' ||
-    Array.isArray(data.groups) ||
-    !data.global ||
-    typeof data.global !== 'object' ||
-    Array.isArray(data.global)
-  ) {
-    throw new Error('Moderationsdatei hat eine ungültige Struktur.');
-  }
-
-  return data;
 }
 
 async function saveModerationRuntime(data) {
-  await fs.mkdir(path.dirname(MODERATION_RUNTIME_FILE), { recursive: true });
+  moderationRuntimeCache = data;
+  const snapshot = JSON.stringify(data, null, 2);
 
-  const tempFile = `${MODERATION_RUNTIME_FILE}.${randomUUID()}.tmp`;
+  moderationRuntimeWriteQueue = moderationRuntimeWriteQueue
+    .catch(() => {})
+    .then(async () => {
+      await fs.mkdir(path.dirname(MODERATION_RUNTIME_FILE), { recursive: true });
 
-  try {
-    await fs.writeFile(
-      tempFile,
-      JSON.stringify(data, null, 2),
-      'utf8'
-    );
+      const tempFile = `${MODERATION_RUNTIME_FILE}.${randomUUID()}.tmp`;
 
-    await fs.rename(tempFile, MODERATION_RUNTIME_FILE);
-  } catch (error) {
-    await fs.rm(tempFile, { force: true }).catch(() => {});
-    throw error;
-  }
+      try {
+        await fs.writeFile(tempFile, snapshot, 'utf8');
+        await fs.rename(tempFile, MODERATION_RUNTIME_FILE);
+      } catch (error) {
+        await fs.rm(tempFile, { force: true }).catch(() => {});
+        throw error;
+      }
+    });
+
+  return moderationRuntimeWriteQueue;
 }
 
 async function getModerationTarget(message) {
@@ -2437,6 +2494,7 @@ const GROUP_STATS_FILE = path.join(ROOT, 'data', 'group-stats.json');
 
 const recentSpamMessages = new Map();
 const spamWarningCooldown = new Map();
+let lastSpamCleanupAt = 0;
 
 async function writePersistentJson(file, data) {
   await fs.mkdir(path.dirname(file), { recursive: true });
@@ -2518,10 +2576,18 @@ async function trackGroupMessage(chatId, aliases, text, pushName) {
         active.push(now);
         recentSpamMessages.set(key, active);
 
-        for (const [entry, times] of recentSpamMessages) {
-          const filtered = times.filter(time => now - time <= 10000);
-          if (filtered.length === 0) recentSpamMessages.delete(entry);
-          else recentSpamMessages.set(entry, filtered);
+        if (now - lastSpamCleanupAt >= 30000) {
+          lastSpamCleanupAt = now;
+
+          for (const [entry, times] of recentSpamMessages) {
+            const filtered = times.filter(time => now - time <= 10000);
+            if (filtered.length === 0) recentSpamMessages.delete(entry);
+            else recentSpamMessages.set(entry, filtered);
+          }
+
+          for (const [entry, timestamp] of spamWarningCooldown) {
+            if (now - timestamp > 60000) spamWarningCooldown.delete(entry);
+          }
         }
 
         const cooldown = spamWarningCooldown.get(key) || 0;
@@ -2560,7 +2626,7 @@ async function handleMessage(message) {
     aliases = await getSenderAliases(message);
 
     if (aliases.length > 0) {
-      await rememberContactNames(aliases, message.pushName);
+      void rememberContactNames(aliases, message.pushName);
     }
   }
 
@@ -2639,7 +2705,7 @@ async function handleMessage(message) {
 
 
   if (chatId.endsWith('@g.us') && !message.key.fromMe && aliases.length > 0) {
-    await trackGroupMessage(chatId, aliases, text, message.pushName);
+    void trackGroupMessage(chatId, aliases, text, message.pushName).catch(error => console.error('Gruppenstatistik:', error));
   }
 
   const isAI = /^\/ai(?:\s|$)/i.test(text);
