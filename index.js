@@ -5,7 +5,10 @@ import makeWASocket, {
 } from '@whiskeysockets/baileys';
 
 import { GoogleGenAI } from '@google/genai';
+import QRCode from 'qrcode';
+import { getAdminParticipants, buildTagAllPayload } from './command-utils.js';
 import pino from 'pino';
+import { parseTranslateArgs } from './translate.js';
 import dotenv from 'dotenv';
 import readline from 'node:readline/promises';
 import process from 'node:process';
@@ -1141,12 +1144,18 @@ Gib ausschließlich JSON in dieser Form zurück:
 
 
 async function runTextTask(prompt, userText, maxOutputTokens = 1200) {
-  const response = await generateWithFallback({
-    model: TEXT_MODEL,
-    contents: [{ role: 'user', parts: [{ text: `${prompt}\n\nEingabe:\n${userText}` }] }],
-    config: { maxOutputTokens }
-  });
-  return response.text?.trim() || 'Ich konnte keine Antwort erstellen.';
+  botStats.requests++;
+  try {
+    const response = await generateWithFallback({
+      model: TEXT_MODEL,
+      contents: [{ role: 'user', parts: [{ text: `${prompt}\n\nEingabe:\n${userText}` }] }],
+      config: { maxOutputTokens }
+    });
+    return response.text?.trim() || 'Ich konnte keine Antwort erstellen.';
+  } catch (error) {
+    botStats.errors++;
+    throw error;
+  }
 }
 
 async function getResearchContext(query) {
@@ -1450,6 +1459,89 @@ async function handleBotCommand(command, args, chatId, message, profile, profile
   const send = async text => sendBotMessage(
     chatId, { text }, { quoted: message }
   );
+  if (command === '/admins') {
+    if (!isGroup) return send('/admins funktioniert nur in Gruppen.');
+    try {
+      const metadata = await sock.groupMetadata(chatId);
+      const admins = getAdminParticipants(metadata);
+      if (!admins.length) return send('In dieser Gruppe wurden keine Admins gefunden.');
+
+      const mentions = admins.map(item =>
+        item.id || item.jid || item.phoneNumber
+      );
+      const lines = mentions.map(jid => '@' + jid.split('@')[0]);
+
+      return sendBotMessage(
+        chatId,
+        { text: 'Gruppenadmins:\n' + lines.join('\n'), mentions },
+        { quoted: message }
+      );
+    } catch (error) {
+      console.error('/admins fehlgeschlagen:', error);
+      return send('Die Gruppenadmins konnten nicht geladen werden.');
+    }
+  }
+
+  if (command === '/tagall') {
+    if (!isGroup) return send('/tagall funktioniert nur in Gruppen.');
+
+    try {
+      const metadata = await sock.groupMetadata(chatId);
+      let senderIsGroupAdmin = false;
+
+      for (const alias of aliases) {
+        if (await isGroupAdmin(metadata, alias)) {
+          senderIsGroupAdmin = true;
+          break;
+        }
+      }
+
+      if (!senderIsGroupAdmin) {
+        return send('Nur Gruppenadmins dürfen /tagall verwenden.');
+      }
+
+      const participants = metadata.participants || [];
+      if (!participants.length) {
+        return send('Die Gruppenmitglieder konnten nicht ermittelt werden.');
+      }
+
+      if (participants.length > 200) {
+        return send('Diese Gruppe hat mehr als 200 Mitglieder. /tagall ist hier zum Schutz vor Massen-Spam deaktiviert.');
+      }
+
+      const payload = buildTagAllPayload(participants, args);
+      return sendBotMessage(chatId, payload, { quoted: message });
+    } catch (error) {
+      console.error('/tagall fehlgeschlagen:', error);
+      return send('Die Gruppenmitglieder konnten nicht erwähnt werden.');
+    }
+  }
+
+  if (command === '/qr') {
+    if (!args) return send('Verwendung: /qr [Text oder URL]');
+    if (args.length > 2500) {
+      return send('Der Inhalt darf höchstens 2500 Zeichen lang sein.');
+    }
+
+    try {
+      const image = await QRCode.toBuffer(args, {
+        type: 'png',
+        width: 640,
+        margin: 3,
+        errorCorrectionLevel: 'M'
+      });
+
+      return sendBotMessage(
+        chatId,
+        { image, mimetype: 'image/png', caption: 'QR-Code erstellt.' },
+        { quoted: message }
+      );
+    } catch (error) {
+      console.error('/qr fehlgeschlagen:', error);
+      return send('Der QR-Code konnte nicht erstellt werden.');
+    }
+  }
+
 
   if (command === '/afk') {
     const afk = await readAfkData();
@@ -1784,7 +1876,9 @@ async function handleBotCommand(command, args, chatId, message, profile, profile
       groups:
         '*GRUPPENSTEUERUNG*\n' +
         '› /group exclude – diese Gruppe für den Bot sperren (Owner)\n' +
-        '› /group allow – Bot in dieser Gruppe wieder aktivieren (Owner)',
+        '› /group allow – Bot in dieser Gruppe wieder aktivieren (Owner)\n' +
+        '› /admins – Gruppenadmins anzeigen\n' +
+        '› /tagall [Text] – alle Mitglieder erwähnen (Gruppenadmins)',
 
       ai:
         '*KI & KOMMUNIKATION*\n' +
@@ -1792,7 +1886,8 @@ async function handleBotCommand(command, args, chatId, message, profile, profile
         '› /ai [Nachricht]\n' +
         '› /voice [Nachricht]\n' +
         '› /translate [Text]\n' +
-        '› /explain [Text]',
+        '› /explain [Text]\n' +
+        '› /correct [Text] – Rechtschreibung und Grammatik korrigieren',
 
       images:
         '*BILDER & VISION*\n' +
@@ -1857,7 +1952,7 @@ async function handleBotCommand(command, args, chatId, message, profile, profile
       tools:
         '*TOOLS & STATUS*\n' +
         '› /help tools\n' +
-        '› /ping – Antwortzeit anzeigen' +
+        '› /ping – Antwortzeit anzeigen\n› /qr [Text oder URL] – QR-Code erstellen' +
         (isAdmin ? '\n› /status – Botstatus\n› /stats – Nutzungsstatistik\n› /sqlmap – lokaler SQLMap-Test' : '')
     };
 
@@ -1968,18 +2063,22 @@ async function handleBotCommand(command, args, chatId, message, profile, profile
       : 'Keine passenden Verlaufseinträge gefunden.');
   }
 
-  if (['/translate', '/explain', '/research', '/poll'].includes(command)) {
+  if (['/translate', '/explain', '/research', '/poll', '/correct'].includes(command)) {
     if (!args) return send(`Verwendung: ${command} [Text oder Frage]`);
     if (args.length > 3000) return send('Die Eingabe darf höchstens 3000 Zeichen lang sein.');
     try {
       if (command === '/translate') {
-        const match = args.match(/^([^:]{2,40}):\s*([\s\S]+)$/);
-        const language = match ? match[1].trim() : 'Deutsch';
-        const source = match ? match[2].trim() : args;
-        return send(await runTextTask(`Übersetze den folgenden Text in ${language}. Erkenne die Ausgangssprache automatisch. Gib nur die Übersetzung aus.`, source));
+        const { language, source } = parseTranslateArgs(args);
+        return send(await runTextTask(
+          `Übersetze den Text in ${language}. Erkenne die Ausgangssprache selbstständig. Gib ausschließlich die Übersetzung aus.`,
+          source
+        ));
       }
       if (command === '/explain') {
         return send(await runTextTask('Erkläre den folgenden Inhalt verständlich, sachlich und passend für einen Schüler der 9. Klasse. Erfinde keine fehlenden Informationen.', args));
+      }
+      if (command === '/correct') {
+        return send(await runTextTask('Korrigiere ausschließlich Rechtschreibung, Grammatik und Zeichensetzung. Behalte Bedeutung, Stil und Formulierungen möglichst bei. Gib nur den korrigierten Text aus und füge keine Erklärungen hinzu.', args));
       }
       if (command === '/research') {
         const context = await getResearchContext(args);
@@ -2063,8 +2162,11 @@ async function handleBotCommand(command, args, chatId, message, profile, profile
 
     return send(
       'Shadow Bot – Statistik\n' +
-      `KI-Anfragen: ${botStats.requests}\n` +
-      `Fehler: ${botStats.errors}\n\n` +
+      `KI-Anfragen erfolgreich: ${Math.max(0, botStats.requests - botStats.errors)}\n` +
+      `Fehler: ${botStats.errors}\n` +
+      `Fehlerquote: ${botStats.requests ? (botStats.errors / botStats.requests * 100).toFixed(1) : '0.0'} %\n\n` +
+      '*GEMINI-PROJEKTE*\n' +
+      botStats.projectUses.map((count, i) => `Projekt ${i + 1}: ${count} Nutzung(en)`).join('\n') + '\n\n' +
       '*GRUPPENSTATISTIK*\n' +
       `Gruppen: ${groups.length}\n` +
       `Nachrichten: ${totalMessages}\n` +
@@ -2508,7 +2610,7 @@ async function handleMessage(message) {
   const isSticker = /^\/sticker$/i.test(text);
   const isAccept = /^\/accept$/i.test(text);
   const isDecline = /^\/decline$/i.test(text);
-  const commandMatch = text.match(/^(\/afk|\/group|\/help|\/memory|\/personality|\/name|\/clear|\/confirmclear|\/cancelclear|\/status|\/stats|\/sqlmap|\/cookies|\/ping|\/note|\/notes|\/history|\/translate|\/explain|\/research|\/poll|\/kick|\/bann|\/unbann|\/mute|\/unmute|\/kickall|\/bannall|\/unbannall|\/muteall|\/unmuteall|\/block|\/unblock|\/admin|\/permissions|\/grant|\/revoke|\/grantall|\/revokeall|\/news|\/antispam)(?:\s+([\s\S]+))?$/i);
+  const commandMatch = text.match(/^(\/afk|\/group|\/help|\/memory|\/personality|\/name|\/clear|\/confirmclear|\/cancelclear|\/status|\/stats|\/sqlmap|\/cookies|\/ping|\/note|\/notes|\/history|\/translate|\/explain|\/research|\/poll|\/admins|\/tagall|\/correct|\/qr|\/kick|\/bann|\/unbann|\/mute|\/unmute|\/kickall|\/bannall|\/unbannall|\/muteall|\/unmuteall|\/block|\/unblock|\/admin|\/permissions|\/grant|\/revoke|\/grantall|\/revokeall|\/news|\/antispam)(?:\s+([\s\S]+))?$/i);
   const isBotCommand = Boolean(commandMatch);
 
   // Alles andere wird ignoriert.
