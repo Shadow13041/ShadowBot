@@ -6,6 +6,8 @@ import makeWASocket, {
 
 import { GoogleGenAI } from '@google/genai';
 import QRCode from 'qrcode';
+import { sendInteractiveList, sendInteractiveButtons } from './buttons.js';
+import { getInteractiveReplyId } from './button-utils.js';
 import { getAdminParticipants, buildTagAllPayload } from './command-utils.js';
 import pino from 'pino';
 import { parseTranslateArgs } from './translate.js';
@@ -393,6 +395,7 @@ function getText(message) {
     content.documentMessage?.caption ||
     content.buttonsResponseMessage?.selectedButtonId ||
     content.listResponseMessage?.singleSelectReply?.selectedRowId ||
+    getInteractiveReplyId(content) ||
     ''
   ).trim();
 }
@@ -899,6 +902,38 @@ async function sendBotMessage(chatId, content, options) {
   } finally {
     await stopTyping(chatId);
   }
+}
+
+async function sendBotInteractive(chatId, sender, content, options = {}) {
+  content = formatBotMessage(content);
+
+  await startTyping(chatId);
+
+  try {
+    await new Promise(resolve =>
+      setTimeout(resolve, randomTypingDelay())
+    );
+
+    return await sender(sock, chatId, {
+      ...content,
+      quoted: options.quoted
+    });
+  } finally {
+    await stopTyping(chatId);
+  }
+}
+
+async function sendBotButtons(chatId, content, options = {}) {
+  return sendBotInteractive(chatId, sendInteractiveButtons, content, options);
+}
+
+async function sendBotList(chatId, content, options = {}) {
+  return sendBotInteractive(chatId, sendInteractiveList, {
+    ...content,
+    title: 'Shadow Bot',
+    footer: 'Hilfe und Befehle',
+    buttonText: 'Themen auswählen'
+  }, options);
 }
 
 async function readAfkData() {
@@ -1975,21 +2010,27 @@ async function handleBotCommand(command, args, chatId, message, profile, profile
     if (topic && help[topic]) return send(help[topic]);
     if (topic) return send('Unbekanntes Thema. Nutze /help für alle Themen.');
 
-    return send(
-      '*SHADOW BOT – HILFE*\n\n' +
-      '› /help [Thema] – Hilfe zu einem Bereich anzeigen\n' +
-      '› /help afk – Abwesenheit\n' +
-      '› /help groups – Gruppensteuerung\n' +
-      '› /help ai – KI & Kommunikation\n' +
-      '› /help images – Bilder & Medien\n' +
-      '› /help research – Recherche & Umfragen\n' +
-      '› /help notes – Notizen & Verlauf\n' +
-      '› /help profile – KI-Profil\n' +
-      '› /help privacy – Datenschutz\n' +
-      '› /help moderation – Moderation\n' +
-      (role.role === 'owner' ? '› /help admin – Administration\n' : '') +
-      '› /help tools – Tools & Status'
-    );
+    const helpRows = [
+      { id: '/help afk', title: 'Abwesenheit' },
+      { id: '/help groups', title: 'Gruppensteuerung' },
+      { id: '/help ai', title: 'KI & Kommunikation' },
+      { id: '/help images', title: 'Bilder & Medien' },
+      { id: '/help research', title: 'Recherche & Umfragen' },
+      { id: '/help notes', title: 'Notizen & Verlauf' },
+      { id: '/help profile', title: 'KI-Profil' },
+      { id: '/help privacy', title: 'Datenschutz' },
+      { id: '/help moderation', title: 'Moderation' },
+      { id: '/help tools', title: 'Tools & Status' }
+    ];
+
+    if (role.role === 'owner') {
+      helpRows.push({ id: '/help admin', title: 'Administration' });
+    }
+
+    return sendBotList(chatId, {
+      text: 'Wähle einen Bereich aus, um die passende Hilfe zu öffnen.',
+      rows: helpRows
+    }, { quoted: message });
   }
   if (command === '/cookies') {
     return send(
