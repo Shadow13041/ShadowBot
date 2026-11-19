@@ -1875,124 +1875,122 @@ async function handleBotCommand(command, args, chatId, message, profile, profile
 
       groups:
         '*GRUPPENSTEUERUNG*\n' +
-        '› /group exclude – diese Gruppe für den Bot sperren (Owner)\n' +
-        '› /group allow – Bot in dieser Gruppe wieder aktivieren (Owner)\n' +
+        '› /group exclude – Gruppe für den Bot sperren (Owner)\n' +
+        '› /group allow – Bot wieder aktivieren (Owner)\n' +
         '› /admins – Gruppenadmins anzeigen\n' +
-        '› /tagall [Text] – alle Mitglieder erwähnen (Gruppenadmins)',
+        '› /tagall [Text] – alle Mitglieder erwähnen (Gruppenadmins)\n' +
+        '› /antispam on|off|status – Spam-Warnungen einstellen (Gruppenadmins)\n' +
+        '› /poll [Frage] – WhatsApp-Umfrage erstellen',
 
       ai:
         '*KI & KOMMUNIKATION*\n' +
-        '› /help ai\n' +
-        '› /ai [Nachricht]\n' +
-        '› /voice [Nachricht]\n' +
-        '› /translate [Text]\n' +
-        '› /explain [Text]\n' +
-        '› /correct [Text] – Rechtschreibung und Grammatik korrigieren',
+        '› /ai [Nachricht] – KI-Chat\n' +
+        '› /voice [Nachricht] – KI-Antwort als Sprachnachricht\n' +
+        '› /translate [Sprache: Text] – übersetzen\n' +
+        '› /explain [Text] – Inhalt erklären\n' +
+        '› /correct [Text] – Rechtschreibung und Grammatik korrigieren\n' +
+        '› /research [Thema] – im Internet recherchieren',
 
       images:
-        '*BILDER & VISION*\n' +
-        '› /help images\n' +
-        '› /vision [Frage]\n' +
-        '› /imagine [Beschreibung]\n' +
-        '› /edit [Anweisung]\n' +
-        '› /restyle [Stil]\n' +
-        '› /sticker',
+        '*BILDER & MEDIEN*\n' +
+        '› /vision [Frage] – Bild analysieren\n' +
+        '› /imagine [Beschreibung] – Bild erstellen\n' +
+        '› /edit [Anweisung] – Bild bearbeiten (auf Bild antworten)\n' +
+        '› /restyle [Stil] – Bildstil verändern (auf Bild antworten)\n' +
+        '› /sticker – Sticker aus einem Bild oder Video erstellen',
 
       research:
-        '*RECHERCHE & GRUPPEN*\n' +
-        '› /help research\n' +
-        '› /research [Thema]\n' +
-        '› /poll [Frage]',
+        '*RECHERCHE & UMFRAGEN*\n' +
+        '› /research [Thema] – Recherche mit Quellen\n' +
+        '› /poll [Frage] – vier Antwortmöglichkeiten erstellen',
 
       notes:
         '*NOTIZEN & VERLAUF*\n' +
-        '› /help notes\n' +
-        '› /note [Text]\n' +
-        '› /notes\n' +
-        '› /note edit [ID] [Text]\n' +
-        '› /note delete [ID]\n' +
-        '› /history [Suchtext]',
+        '› /note [Text] – Notiz speichern\n' +
+        '› /notes – alle Notizen anzeigen\n' +
+        '› /note edit [ID] [Text] – Notiz bearbeiten\n' +
+        '› /note delete [ID] – Notiz löschen\n' +
+        '› /history [Suchtext] – Chatverlauf durchsuchen',
 
       profile:
         '*KI-PROFIL*\n' +
-        '› /help profile\n' +
-        '› /memory\n' +
-        '› /personality [Text]\n' +
-        '› /name [Name]\n' +
-        '› /name reset\n' +
-        '› /clear\n' +
-        '› /confirmclear\n' +
-        '› /cancelclear',
+        '› /memory – gespeicherte Erinnerungen anzeigen\n' +
+        '› /personality [Text] – Antwortstil festlegen\n' +
+        '› /name [Name] – eigenen Namen speichern\n' +
+        '› /name reset – gespeicherten Namen löschen\n' +
+        '› /clear – Erinnerungen löschen vorbereiten\n' +
+        '› /confirmclear – Löschung bestätigen\n' +
+        '› /cancelclear – Löschung abbrechen',
 
       privacy:
         '*DATENSCHUTZ*\n' +
-        '› /help privacy\n' +
-        '› /cookies\n' +
-        '› /accept\n' +
-        '› /decline',
+        '› /cookies – Datenschutzinformationen\n' +
+        '› /accept – Speicherung erlauben\n' +
+        '› /decline – Speicherung ablehnen und Daten löschen',
 
       moderation:
         '*MODERATION*\n' +
-        '› /help moderation\n' +
         '› /kick – Person aus Gruppe entfernen\n' +
         '› /bann – Person in Gruppe bannen\n' +
         '› /unbann – Gruppenbann aufheben\n' +
         '› /mute – Person stummschalten\n' +
         '› /unmute – Stummschaltung aufheben\n' +
-        '› /kickall – aus allen Gruppen entfernen\n' +
+        '› /kickall – Person aus allen Gruppen entfernen\n' +
         '› /bannall – global bannen\n' +
         '› /unbannall – globalen Bann aufheben\n' +
         '› /muteall – global stummschalten\n' +
         '› /unmuteall – globale Stummschaltung aufheben\n' +
-        '› /block – Kontakt blockieren\n' +
-        '› /unblock – Kontakt entblockieren\n' +
+        '› /block – Kontakt blockieren (Privat-Chat)\n' +
+        '› /unblock – Kontakt entblockieren (Privat-Chat)\n' +
         '› /news – Moderationsereignisse anzeigen\n' +
         '› /antispam on|off|status – Spam-Warnungen einstellen',
 
       tools:
         '*TOOLS & STATUS*\n' +
-        '› /help tools\n' +
-        '› /ping – Antwortzeit anzeigen\n› /qr [Text oder URL] – QR-Code erstellen' +
-        (isAdmin ? '\n› /status – Botstatus\n› /stats – Nutzungsstatistik\n› /sqlmap – lokaler SQLMap-Test' : '')
+        '› /ping – Antwortzeit anzeigen\n' +
+        '› /qr [Text oder URL] – QR-Code erstellen' +
+        (isAdmin
+          ? '\n› /status – Botstatus anzeigen\n› /stats – Nutzungs- und Gruppenstatistik\n› /sqlmap [lokale URL] – lokalen SQLMap-Test starten'
+          : '')
     };
 
     if (topic === 'admin') {
-      if (role.role !== 'owner') return send('Diese Hilfe ist nur für den Owner verfügbar.');
+      if (role.role !== 'owner') {
+        return send('Diese Hilfe ist nur für den Owner verfügbar.');
+      }
+
       return send(
         '*ADMINISTRATION*\n' +
-        '› /help admin\n' +
-        '› /admin add [Nummer]\n' +
-        '› /admin remove [Nummer]\n' +
-        '› /permissions [Nummer]\n' +
-        '› /permissions all\n' +
-        '› /grant [Nummer] [Befehl]\n' +
-        '› /revoke [Nummer] [Befehl]\n' +
-        '› /grantall [Befehl]\n' +
-        '› /revokeall [Befehl]'
+        '› /admin add [Nummer] – Admin hinzufügen\n' +
+        '› /admin remove [Nummer] – Admin entfernen\n' +
+        '› /permissions [Nummer] – Berechtigungen anzeigen\n' +
+        '› /permissions all – alle Admin-Berechtigungen anzeigen\n' +
+        '› /grant [Nummer] [Befehl] – Berechtigung erteilen\n' +
+        '› /revoke [Nummer] [Befehl] – Berechtigung entziehen\n' +
+        '› /grantall [Befehl] – Standardberechtigung aktivieren\n' +
+        '› /revokeall [Befehl] – Standardberechtigung deaktivieren'
       );
     }
 
     if (topic && help[topic]) return send(help[topic]);
-
     if (topic) return send('Unbekanntes Thema. Nutze /help für alle Themen.');
 
     return send(
       '*SHADOW BOT – HILFE*\n\n' +
-      '› /help afk\n' +
-      '› /help groups\n' +
-      '› /help ai\n' +
-      '› /help images\n' +
-      '› /help research\n' +
-      '› /help notes\n' +
-      '› /help profile\n' +
-      '› /help privacy\n' +
-      '› /help moderation\n' +
-      (role.role === 'owner' || role.role === 'admin' ? '› /help admin\n' : '') +
-      '› /help tools\n\n' +
-      'Weitere Hilfe: /help [Thema]'
+      '› /help [Thema] – Hilfe zu einem Bereich anzeigen\n' +
+      '› /help afk – Abwesenheit\n' +
+      '› /help groups – Gruppensteuerung\n' +
+      '› /help ai – KI & Kommunikation\n' +
+      '› /help images – Bilder & Medien\n' +
+      '› /help research – Recherche & Umfragen\n' +
+      '› /help notes – Notizen & Verlauf\n' +
+      '› /help profile – KI-Profil\n' +
+      '› /help privacy – Datenschutz\n' +
+      '› /help moderation – Moderation\n' +
+      (role.role === 'owner' ? '› /help admin – Administration\n' : '') +
+      '› /help tools – Tools & Status'
     );
   }
-
   if (command === '/cookies') {
     return send(
       'Shadow Bot – Datenschutz und Zustimmung\n\n' +
