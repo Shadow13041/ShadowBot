@@ -3104,7 +3104,7 @@ async function startBot() {
         : Number(rawTimestamp);
 
       if (!Number.isFinite(messageTimestamp) || messageTimestamp <= botStartedAt) {
-        console.log('Alte Nachricht ignoriert.');
+
         continue;
       }
 
